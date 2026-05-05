@@ -1,0 +1,16 @@
+# 台灣求職避雷器 - 項目配置示例
+# 複製此文件為 config.json 並填入你的配置
+
+{
+  "model_type": "openai",
+  "api_key": "sk-your-api-key-here",
+  "local_url": "http://localhost:11434",
+  "crawler": {
+    "max_pages": 5,
+    "keywords": "C# .NET",
+    "interval": 3600
+  },
+  "analyzer": {
+    "enable_ai_insights": true
+  }
+}

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台灣求職避雷器</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 台灣求職避雷器</h1>
+        
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="settings">⚙️ 設定</button>
+            <button class="tab-btn" data-tab="about">ℹ️ 關於</button>
+        </div>
+
+        <!-- 設定標籤 -->
+        <div id="settings" class="tab-content active">
+            <h2>模型配置</h2>
+            
+            <div class="config-group">
+                <label>
+                    <input type="radio" name="model" value="openai" id="model-openai">
+                    OpenAI API
+                </label>
+                <input type="password" id="openai-key" placeholder="輸入 OpenAI API Key" class="hidden">
+            </div>
+
+            <div class="config-group">
+                <label>
+                    <input type="radio" name="model" value="claude" id="model-claude">
+                    Claude API
+                </label>
+                <input type="password" id="claude-key" placeholder="輸入 Claude API Key" class="hidden">
+            </div>
+
+            <div class="config-group">
+                <label>
+                    <input type="radio" name="model" value="local" id="model-local">
+                    本地模型 (Ollama)
+                </label>
+                <input type="text" id="local-url" placeholder="http://localhost:11434" class="hidden">
+            </div>
+
+            <button id="save-btn" class="btn-primary">💾 保存設定</button>
+            
+            <div id="status" class="status-message"></div>
+
+            <h2>功能選項</h2>
+            <label>
+                <input type="checkbox" id="auto-analyze">
+                自動分析職位 (進入 104 時)
+            </label>
+            <label>
+                <input type="checkbox" id="show-stats">
+                顯示薪資統計
+            </label>
+        </div>
+
+        <!-- 關於標籤 -->
+        <div id="about" class="tab-content">
+            <h2>關於此工具</h2>
+            <p>
+                這是一個開源工具，幫助台灣勞工識別低薪高用的職缺。
+            </p>
+            <p>
+                <strong>功能：</strong>
+            </p>
+            <ul>
+                <li>✓ 自動分析 104 上的職位</li>
+                <li>✓ 比對薪資標準</li>
+                <li>✓ 標記風險職缺</li>
+                <li>✓ 支援本地 AI 模型</li>
+            </ul>
+            <p>
+                <strong>開源地址：</strong> 
+                <a href="#" target="_blank">GitHub</a>
+            </p>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

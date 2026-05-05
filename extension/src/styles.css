@@ -1,0 +1,46 @@
+/**
+ * 在 104 職缺頁面上的樣式
+ */
+
+.risk-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 12px;
+  margin-left: 8px;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.risk-high {
+  background-color: #ff6b6b;
+  color: white;
+}
+
+.risk-medium {
+  background-color: #ffd93d;
+  color: #333;
+}
+
+.risk-low {
+  background-color: #6bcf7f;
+  color: white;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 深色模式支援 */
+@media (prefers-color-scheme: dark) {
+  .risk-medium {
+    color: #000;
+  }
+}
