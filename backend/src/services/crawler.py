@@ -126,7 +126,7 @@ class JobCrawler:
                 'salary_min': salary_range['min'],
                 'salary_max': salary_range['max'],
                 'url': item.find('a')['href'] if item.find('a') else '',
-                'description': item.find('p', class_='summary')?.text.strip() or '',
+                'description': item.find('p', class_='summary').text.strip() if item.find('p', class_='summary') else '',
                 'crawled_at': datetime.now().isoformat()
             }
         

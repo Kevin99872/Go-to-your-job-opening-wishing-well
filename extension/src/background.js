@@ -1,101 +1,143 @@
 /**
  * 台灣求職避雷器 - 後台服務
  * 負責與後端 API 通訊、資料緩存、事件管理
+ * 支援：後端 Flask API 模式 / 直接 Ollama 模式
  */
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const DEFAULT_BACKEND_URL = 'http://localhost:5000';
+const DEFAULT_OLLAMA_URL  = 'http://localhost:11434';
 const CACHE_DURATION = 3600000; // 1 小時
 
-// 設定存儲
-chrome.storage.local.get(['apiKey', 'useLocalModel'], (result) => {
-  if (!result.apiKey && !result.useLocalModel) {
-    // 首次安裝，提示用戶設定
-    console.log('請設定 API Key 或選擇本地模型');
+// 首次安裝提示
+chrome.storage.local.get(['apiKey', 'directMode', 'backendUrl'], (result) => {
+  if (!result.apiKey && !result.directMode && !result.backendUrl) {
+    console.log('請至「🔌 連線」頁設定後端 API 或 Ollama 端口');
   }
 });
 
-// 監聽來自 content script 的消息
+// ── 工具：讀取連線設定 ─────────────────────────────────────
+function getConnectionConfig() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(
+      ['backendUrl', 'ollamaUrl', 'ollamaModel', 'directMode'],
+      (result) => resolve({
+        backendUrl:  result.backendUrl  || DEFAULT_BACKEND_URL,
+        ollamaUrl:   result.ollamaUrl   || DEFAULT_OLLAMA_URL,
+        ollamaModel: result.ollamaModel || 'llama2',
+        directMode:  result.directMode  === true
+      })
+    );
+  });
+}
+
+// ── 消息監聽 ───────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'ANALYZE_JOB') {
-    analyzeJob(request.jobData).then(result => {
-      sendResponse({ success: true, result });
-    }).catch(error => {
-      sendResponse({ success: false, error: error.message });
-    });
-    return true; // 保持通道開放以進行非同步回應
+    analyzeJob(request.jobData)
+      .then(result => sendResponse({ success: true, result }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
   }
-  
+
   if (request.type === 'GET_SALARY_STATS') {
-    getSalaryStats(request.jobTitle).then(result => {
-      sendResponse({ success: true, result });
-    }).catch(error => {
-      sendResponse({ success: false, error: error.message });
-    });
+    getSalaryStats(request.jobTitle)
+      .then(result => sendResponse({ success: true, result }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
   }
 });
 
-/**
- * 分析職位信息
- */
+// ── 分析職位（自動選擇模式）──────────────────────────────
 async function analyzeJob(jobData) {
   const { jobTitle, salary, company, description } = jobData;
-  
+  const cfg = await getConnectionConfig();
+
+  if (cfg.directMode) {
+    return analyzeJobDirect(jobData, cfg);
+  }
+
+  // 後端 API 模式
+  const salaryStats = await getSalaryStats(jobTitle, cfg.backendUrl);
+
+  const response = await fetch(`${cfg.backendUrl}/api/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobTitle, salary, company, description, salaryStats })
+  });
+
+  if (!response.ok) throw new Error(`後端 API 回應 ${response.status}`);
+  return response.json();
+}
+
+// ── 直接 Ollama 模式（不經後端）──────────────────────────
+async function analyzeJobDirect(jobData, cfg) {
+  const { jobTitle, salary, description } = jobData;
+
+  const prompt = `你是台灣職場分析專家，請分析以下職缺的風險：
+職位：${jobTitle}
+薪資：${salary}
+描述：${(description || '').substring(0, 400)}
+
+請以 JSON 格式回答（只輸出 JSON，不要其他文字）：
+{
+  "riskLevel": "high|medium|low",
+  "score": 0-100,
+  "reasons": ["原因1", "原因2"],
+  "recommendation": "建議..."
+}`;
+  console.log("已開始分析職缺，等待 Ollama 回應...");
+  const response = await fetch(`${cfg.ollamaUrl}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: cfg.ollamaModel,
+      prompt,
+      stream: false,
+      format: 'json'
+    }),
+    signal: AbortSignal.timeout(30000)
+  });
+
+  if (!response.ok) throw new Error(`Ollama 回應 ${response.status}`);
+
+  const data = await response.json();
   try {
-    // 獲取薪資統計
-    const salaryStats = await getSalaryStats(jobTitle);
-    
-    // 呼叫後端 API 進行分析
-    const response = await fetch(`${API_BASE_URL}/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jobTitle,
-        salary,
-        company,
-        description,
-        salaryStats
-      })
-    });
-    
-    if (!response.ok) throw new Error('API 請求失敗');
-    
-    const result = await response.json();
-    return result;
-  } catch (error) {
-    console.error('分析職位失敗:', error);
-    throw error;
+    return JSON.parse(data.response);
+  } catch {
+    // 若模型未輸出合法 JSON，做基本回退
+    return {
+      riskLevel: 'unknown',
+      score: 50,
+      reasons: ['AI 分析完成，但無法解析結果'],
+      recommendation: data.response?.substring(0, 200) || '請檢查 Ollama 模型輸出'
+    };
+    console.error('Ollama 回應無法解析為 JSON:', data.response);
   }
 }
 
-/**
- * 獲取薪資統計
- */
-async function getSalaryStats(jobTitle) {
+// ── 獲取薪資統計 ──────────────────────────────────────────
+async function getSalaryStats(jobTitle, backendUrl) {
   const cacheKey = `salary_stats_${jobTitle}`;
-  
-  // 檢查緩存
-  return new Promise((resolve) => {
-    chrome.storage.local.get(cacheKey, (result) => {
-      if (result[cacheKey] && Date.now() - result[cacheKey].timestamp < CACHE_DURATION) {
-        resolve(result[cacheKey].data);
-        return;
+
+  return new Promise(async (resolve) => {
+    chrome.storage.local.get(cacheKey, async (result) => {
+      const cached = result[cacheKey];
+      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        return resolve(cached.data);
       }
-      
-      // 從後端獲取
-      fetch(`${API_BASE_URL}/salary-stats?jobTitle=${encodeURIComponent(jobTitle)}`)
-        .then(res => res.json())
-        .then(data => {
-          // 保存到緩存
-          chrome.storage.local.set({
-            [cacheKey]: { data, timestamp: Date.now() }
-          });
-          resolve(data);
-        })
-        .catch(error => {
-          console.error('獲取薪資統計失敗:', error);
-          resolve(null);
-        });
+
+      try {
+        const url = backendUrl || DEFAULT_BACKEND_URL;
+        const res = await fetch(
+          `${url}/api/salary-stats?jobTitle=${encodeURIComponent(jobTitle)}`,
+          { signal: AbortSignal.timeout(8000) }
+        );
+        const data = await res.json();
+        chrome.storage.local.set({ [cacheKey]: { data, timestamp: Date.now() } });
+        resolve(data);
+      } catch {
+        resolve(null);
+      }
     });
   });
 }

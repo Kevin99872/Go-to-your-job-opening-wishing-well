@@ -12,6 +12,7 @@
         
         <div class="tabs">
             <button class="tab-btn active" data-tab="settings">⚙️ 設定</button>
+            <button class="tab-btn" data-tab="connection">🔌 連線</button>
             <button class="tab-btn" data-tab="about">ℹ️ 關於</button>
         </div>
 
@@ -56,6 +57,50 @@
                 <input type="checkbox" id="show-stats">
                 顯示薪資統計
             </label>
+        </div>
+
+        <!-- 連線設定標籤 -->
+        <div id="connection" class="tab-content">
+            <h2>後端 API 設定</h2>
+            <div class="config-group">
+                <label class="group-label">後端伺服器 URL</label>
+                <div class="input-row">
+                    <input type="text" id="backend-url" placeholder="http://localhost:5000">
+                    <button id="test-backend" class="btn-test">測試</button>
+                </div>
+                <div id="backend-status" class="conn-status"></div>
+            </div>
+
+            <h2>Ollama 本地模型</h2>
+            <div class="config-group">
+                <label class="toggle-label">
+                    <span>直接模式（不經後端，直接調用 Ollama）</span>
+                    <label class="switch">
+                        <input type="checkbox" id="direct-mode">
+                        <span class="slider"></span>
+                    </label>
+                </label>
+            </div>
+            <div class="config-group">
+                <label class="group-label">Ollama URL</label>
+                <div class="input-row">
+                    <input type="text" id="ollama-url" placeholder="http://localhost:11434">
+                    <button id="test-ollama" class="btn-test">測試</button>
+                </div>
+                <div id="ollama-status" class="conn-status"></div>
+            </div>
+            <div class="config-group">
+                <label class="group-label">選擇模型</label>
+                <div class="input-row">
+                    <select id="ollama-model-select" class="model-select">
+                        <option value="">-- 請先測試 Ollama 連線 --</option>
+                    </select>
+                    <button id="refresh-models" class="btn-test" title="重新整理模型列表">↻</button>
+                </div>
+            </div>
+
+            <button id="save-connection-btn" class="btn-primary">💾 保存連線設定</button>
+            <div id="conn-save-status" class="status-message"></div>
         </div>
 
         <!-- 關於標籤 -->

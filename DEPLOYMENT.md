@@ -1,151 +1,100 @@
 # 📦 部署指南
 
-## 本地部署（已完成）
+## 本地部署
 
-見 [快速開始](QUICKSTART.md)
+見 [QUICKSTART.md](QUICKSTART.md)
+
+---
 
 ## 雲端部署
 
-### Option 1: Heroku（已停止免費）
-
-### Option 2: Railway
+### Option 1: Railway
 
 ```bash
-# 1. 創建 Procfile
-echo "web: gunicorn app:app" > Procfile
+# 建立 Procfile（在 backend/ 目錄下）
+echo "web: gunicorn app:app" > backend/Procfile
 
-# 2. 部署
+# 推送後在 Railway Dashboard 設定環境變數
 railway up
 ```
 
-### Option 3: Render
+### Option 2: Render
 
 1. 連接 GitHub 倉庫
-2. 創建新 Web Service
-3. 選擇 Python
-4. 設置命令：`gunicorn app:app`
-5. 添加環境變數
+2. 建立新 **Web Service**，選擇 Python
+3. Root Directory：`backend`
+4. Start Command：`gunicorn app:app`
+5. 在 Environment 頁新增環境變數（見下方）
 
-### Option 4: Docker (推薦)
+### Option 3: Docker（推薦用於自架）
 
-#### 創建 Dockerfile
+**Dockerfile**（放在專案根目錄）：
 
 ```dockerfile
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 WORKDIR /app
-
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt gunicorn
 
 COPY backend/ .
 
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "app:app"]
+EXPOSE 5000
+CMD ["gunicorn", "-b", "0.0.0.0:5000", "--workers", "2", "app:app"]
 ```
 
-#### 創建 docker-compose.yml
+**docker-compose.yml**（包含後端 + Ollama）：
 
 ```yaml
-version: '3'
+version: '3.9'
 services:
-  web:
+  backend:
     build: .
     ports:
       - "5000:5000"
     environment:
-      MODEL_TYPE: openai
-      API_KEY: ${API_KEY}
+      MODEL_TYPE: ${MODEL_TYPE:-local}
+      API_KEY: ${API_KEY:-}
+      LOCAL_URL: http://ollama:11434
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
     volumes:
-      - ./data:/app/data
-```
+      - ollama_data:/root/.ollama
 
-#### 運行
+volumes:
+  ollama_data:
+```
 
 ```bash
-docker-compose up
+# 啟動所有服務
+docker compose up -d
+
+# 下載模型（首次）
+docker compose exec ollama ollama pull mistral
 ```
 
-## GitHub Pages（用於文檔）
+---
 
-```bash
-# 1. 創建 docs 文件夾
-mkdir docs
+## 環境變數
 
-# 2. 複製文檔
-cp README.md docs/index.md
-cp SETUP_GUIDE.md docs/setup.md
-cp FAQ.md docs/faq.md
+| 變數 | 說明 | 預設值 |
+|------|------|--------|
+| `MODEL_TYPE` | `openai` / `claude` / `local` | `openai` |
+| `API_KEY` | OpenAI 或 Claude API Key | — |
+| `LOCAL_URL` | Ollama 服務地址 | `http://localhost:11434` |
+| `FLASK_ENV` | `production` / `development` | `development` |
+| `DEBUG` | `0` 關閉除錯模式 | `1` |
 
-# 3. 推送
-git add docs/
-git commit -m "Add documentation"
-git push
-```
+---
 
-在 GitHub 倉庫設置中：
-- Settings > Pages
-- Source: main branch /docs folder
+## CI/CD（GitHub Actions）
 
-## 環境變數配置
-
-### 在雲端平台上設置
-
-```env
-# 必需
-MODEL_TYPE=openai
-API_KEY=sk-your-key
-
-# 可選
-LOCAL_URL=http://localhost:11434
-FLASK_ENV=production
-DEBUG=0
-```
-
-## 數據庫部署（未來功能）
-
-### PostgreSQL
-
-```bash
-# 安裝依賴
-pip install psycopg2-binary sqlalchemy
-
-# 設置連接
-DATABASE_URL=postgresql://user:password@localhost/db_name
-```
-
-### MongoDB
-
-```bash
-# 安裝依賴
-pip install pymongo
-
-# 設置連接
-MONGODB_URL=mongodb+srv://user:password@cluster.mongodb.net/db_name
-```
-
-## 監控與日誌
-
-### 使用 Sentry（錯誤追蹤）
-
-```bash
-pip install sentry-sdk
-
-# 在 app.py 中添加
-import sentry_sdk
-sentry_sdk.init("your-sentry-dsn")
-```
-
-### 使用 Datadog（應用監控）
-
-```bash
-pip install datadog
-```
-
-## CI/CD 配置
-
-### GitHub Actions
-
-創建 `.github/workflows/deploy.yml`:
+建立 `.github/workflows/deploy.yml`：
 
 ```yaml
 name: Deploy
@@ -158,70 +107,31 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      
-      - name: Set up Python
-        uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: 3.9
-      
-      - name: Install dependencies
-        run: |
-          pip install -r backend/requirements.txt
-          pip install pytest
-      
-      - name: Run tests
-        run: pytest backend/
-      
-      - name: Deploy
-        run: |
-          # 你的部署命令
+          python-version: '3.11'
+      - run: pip install -r backend/requirements.txt
+      - run: python -m pytest backend/
+      # 加入你的部署步驟（Railway / Render CLI 等）
 ```
-
-## 擴充功能部署
-
-### Chrome Web Store
-
-1. 創建開發者帳戶（$5）
-2. 上傳 zip 文件
-3. 填寫元數據
-4. 等待審核（通常 1-3 小時）
-
-### Edge Add-ons Store
-
-1. 訪問 [Partner Center](https://partner.microsoft.com/edge)
-2. 上傳擴充功能
-3. 填寫詳細信息
-4. 提交審核
-
-## 生產環境檢查清單
-
-- ✅ 測試完所有功能
-- ✅ 更新版本號
-- ✅ 編寫變更日誌
-- ✅ 設置環境變數
-- ✅ 備份數據庫
-- ✅ 設置監控和日誌
-- ✅ 測試回滾程序
-- ✅ 通知用戶
-- ✅ 監控性能
-
-## 故障排除
-
-### 部署後無法連接
-
-1. 檢查環境變數
-2. 查看日誌
-3. 檢查 CORS 設置
-4. 驗證 API Key
-
-### 性能問題
-
-1. 啟用緩存
-2. 使用 CDN
-3. 優化數據庫查詢
-4. 增加 CPU/RAM
 
 ---
 
-需要幫助？查看 [FAQ](FAQ.md)
+## 監控（可選）
+
+```bash
+# Sentry 錯誤追蹤
+pip install sentry-sdk[flask]
+```
+
+```python
+# backend/app.py 最上方加入
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
+sentry_sdk.init(dsn="your-sentry-dsn", integrations=[FlaskIntegration()])
+```
+
+---
+
+需要幫助？查看 [FAQ.md](FAQ.md) 或 [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)

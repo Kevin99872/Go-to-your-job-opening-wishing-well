@@ -1,33 +1,42 @@
 /**
- * 在 104 職缺頁面上的樣式
+ * 台灣求職避雷器 - 注入 104 頁面的樣式
  */
 
-.risk-badge {
+/* ── 風險徽章基礎樣式 ───────────────────────────────────── */
+.twra-badge {
   display: inline-block;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-weight: bold;
-  font-size: 12px;
-  margin-left: 8px;
-  animation: fadeIn 0.3s ease-in;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+  margin-left: 6px;
+  white-space: nowrap;
+  line-height: 1.7;
+  cursor: default;
+  position: relative;
+  z-index: 10000;
+  animation: twra-fadein 0.35s ease;
 }
 
-.risk-high {
-  background-color: #ff6b6b;
-  color: white;
+.twra-badge--high    { background: #ff4757; color: #fff; }
+.twra-badge--medium  { background: #ffa502; color: #222; }
+.twra-badge--low     { background: #2ed573; color: #fff; }
+.twra-badge--unknown { background: #747d8c; color: #fff; }
+
+/* ── 出現動畫 ───────────────────────────────────────────── */
+@keyframes twra-fadein {
+  from { opacity: 0; transform: scale(0.8); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
-.risk-medium {
-  background-color: #ffd93d;
-  color: #333;
-}
+/* ── 相容舊版 class（保留向後相容） ─────────────────────── */
+.risk-badge { display: inline-block; padding: 4px 8px; border-radius: 4px;
+  font-weight: bold; font-size: 12px; margin-left: 8px; }
+.risk-high   { background: #ff6b6b; color: #fff; }
+.risk-medium { background: #ffd93d; color: #333; }
+.risk-low    { background: #6bcf7f; color: #fff; }
 
-.risk-low {
-  background-color: #6bcf7f;
-  color: white;
-}
-
-@keyframes fadeIn {
   from {
     opacity: 0;
     transform: scale(0.9);

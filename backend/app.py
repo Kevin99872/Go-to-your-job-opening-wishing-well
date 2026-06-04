@@ -150,5 +150,45 @@ def get_config():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/ollama/models', methods=['GET'])
+def get_ollama_models():
+    """取得 Ollama 可用模型清單（代理請求）"""
+    try:
+        import requests as req
+        config = model_manager.get_config()
+        ollama_url = config.get('local_url', 'http://localhost:11434').rstrip('/')
+        
+        res = req.get(f'{ollama_url}/api/tags', timeout=5)
+        res.raise_for_status()
+        return jsonify(res.json())
+    
+    except Exception as e:
+        logger.error(f'取得 Ollama 模型失敗: {str(e)}')
+        return jsonify({'error': str(e), 'models': []}), 503
+
+
+@app.route('/api/ollama/generate', methods=['POST'])
+def ollama_generate():
+    """代理 Ollama 生成請求（解決擴充功能 CORS 限制）"""
+    try:
+        import requests as req
+        config = model_manager.get_config()
+        ollama_url = config.get('local_url', 'http://localhost:11434').rstrip('/')
+        
+        payload = request.json or {}
+        res = req.post(
+            f'{ollama_url}/api/generate',
+            json=payload,
+            timeout=60,
+            stream=False
+        )
+        res.raise_for_status()
+        return jsonify(res.json())
+    
+    except Exception as e:
+        logger.error(f'Ollama 生成失敗: {str(e)}')
+        return jsonify({'error': str(e)}), 503
+
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

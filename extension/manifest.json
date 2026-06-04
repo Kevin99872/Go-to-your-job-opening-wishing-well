@@ -10,7 +10,9 @@
     "webRequest"
   ],
   "host_permissions": [
-    "https://www.104.com.tw/*"
+    "https://www.104.com.tw/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "background": {
     "service_worker": "src/background.js"

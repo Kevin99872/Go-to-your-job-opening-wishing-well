@@ -283,11 +283,57 @@ python --version
 1. 訪問 [Discussions](https://github.com/Kevin99872/Go-to-your-job-opening-wishing-well/discussions)
 2. 或提交 [Issue](https://github.com/Kevin99872/Go-to-your-job-opening-wishing-well/issues)
 
+## 🔌 連線設定相關
+
+### Q23: 「🔌 連線」頁在哪裡？
+
+**A:** 點擊工具列的 🎯 圖示後，點選第二個標籤「🔌 連線」即可看到後端 API 與 Ollama 的連線設定。
+
+### Q24: 後端 API 端口可以換掉嗎？
+
+**A:** 可以。在「🔌 連線」頁的「後端伺服器 URL」輸入你的自訂地址（例如 `http://192.168.1.10:8080`），點擊「測試」確認後保存即可。擴充功能會自動使用新的地址。
+
+### Q25: 「直接模式」是什麼？什麼時候使用？
+
+**A:** 開啟直接模式後，擴充功能會**繞過後端**，直接向 Ollama 發送職位分析請求。
+
+適合的情境：
+- 只想用本地 AI 分析職位，不需要薪資統計功能
+- 不想啟動 Flask 後端
+- 想要更快的回應速度
+
+注意：直接模式下**薪資統計功能不可用**，分析結果僅來自 Ollama 的語言理解能力。
+
+### Q26: 直接模式下 Ollama 回應很慢怎麼辦？
+
+**A:** 幾個加速方案：
+
+1. 換用較小的模型：
+   ```bash
+   ollama pull mistral      # 比 llama2 快約 2x
+   ollama pull phi3:mini    # 更輕量
+   ```
+
+2. 在「🔌 連線」頁的模型選單切換至較小的已安裝模型
+
+3. 確認 Ollama 有使用 GPU（若電腦有獨顯，Ollama 會自動偵測）
+
+### Q27: 擴充功能顯示 Ollama 無法連線，但 Ollama 確實在執行？
+
+**A:** 常見原因：
+
+1. **Ollama 預設只監聽 127.0.0.1**，Chrome 擴充功能的請求需要對應的 host_permissions。  
+   → 本專案已在 `manifest.json` 中加入 `http://localhost/*`，請確認你使用的是 `http://localhost:11434` 而非 `http://127.0.0.1:11434`（兩者均可）。
+
+2. **Ollama CORS 問題**：Ollama 預設允許本地來源，通常不需要額外設定。  
+   → 若仍有問題，可改用「後端代理模式」（關閉直接模式），透過 `/api/ollama/generate` 端點中轉請求。
+
+3. **防火牆攔截**：確認 Windows 防火牆或防毒軟體未封鎖 port 11434。
+
 ---
 
 **還有問題？**
 
-- 📧 Email: [你的郵箱]
-- 💬 Discord: [你的 Discord 伺服器]
-- 📞 GitHub Issues: https://github.com/Kevin99872/Go-to-your-job-opening-wishing-well/issues
+- 💬 GitHub Issues: https://github.com/Kevin99872/Go-to-your-job-opening-wishing-well/issues
+- 📖 開發者指南: [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
 
