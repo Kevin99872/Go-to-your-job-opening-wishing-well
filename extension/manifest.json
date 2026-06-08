@@ -7,6 +7,7 @@
     "activeTab",
     "scripting",
     "storage",
+    "tabs",
     "webRequest"
   ],
   "host_permissions": [
@@ -21,7 +22,8 @@
     {
       "matches": ["https://www.104.com.tw/*"],
       "js": ["src/content.js"],
-      "css": ["src/styles.css"]
+      "css": ["src/styles.css"],
+      "run_at": "document_start"
     }
   ],
   "action": {

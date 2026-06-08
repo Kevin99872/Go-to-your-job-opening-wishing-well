@@ -55,8 +55,10 @@ def analyze_job():
         description = data.get('description')
         salary_stats = data.get('salaryStats')
         
-        if not job_title or not salary:
-            return jsonify({'error': '缺少必要信息'}), 400
+        if not job_title:
+            return jsonify({'error': '缺少職位名稱'}), 400
+        if not salary:
+            salary = '薪資未標示'  # 面議或未填薪資仍可分析
         
         # 執行分析
         result = analyzer.analyze(

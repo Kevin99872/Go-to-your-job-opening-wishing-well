@@ -21,9 +21,10 @@ class ModelManager:
     def _load_config(self) -> Dict:
         """載入配置文件或環境變數"""
         config = {
-            'model_type': os.getenv('MODEL_TYPE', 'openai'),
-            'api_key': os.getenv('API_KEY'),
-            'local_url': os.getenv('LOCAL_URL', 'http://localhost:11434')
+            'model_type':   os.getenv('MODEL_TYPE', 'local'),
+            'api_key':      os.getenv('API_KEY'),
+            'local_url':    os.getenv('LOCAL_URL', 'http://localhost:11434'),
+            'ollama_model': os.getenv('OLLAMA_MODEL', 'gemma4:latest')
         }
         
         # 如果有本地配置文件，優先使用
@@ -168,7 +169,7 @@ class ModelManager:
             response = requests.post(
                 f"{self.config.get('local_url')}/api/generate",
                 json={
-                    'model': 'llama2',
+                    'model': self.config.get('ollama_model', 'llama2'),
                     'prompt': prompt,
                     'stream': False
                 },

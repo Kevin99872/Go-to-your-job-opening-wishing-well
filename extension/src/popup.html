@@ -10,6 +10,21 @@
     <div class="container">
         <h1>🎯 台灣求職避雷器</h1>
         
+        <!-- 立即分析按鈕區 -->
+        <div class="run-panel">
+            <button id="run-btn" class="btn-run">▶ 立即分析此頁面</button>
+            <div id="run-status" class="run-status"></div>
+        </div>
+
+        <!-- Console log 區塊 -->
+        <div class="console-panel">
+            <div class="console-header">
+                <span>📋 執行日誌</span>
+                <button id="clear-log" class="btn-clear">清除</button>
+            </div>
+            <div id="console-log" class="console-log"></div>
+        </div>
+
         <div class="tabs">
             <button class="tab-btn active" data-tab="settings">⚙️ 設定</button>
             <button class="tab-btn" data-tab="connection">🔌 連線</button>

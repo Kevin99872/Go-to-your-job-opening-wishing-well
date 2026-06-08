@@ -250,6 +250,103 @@ p {
   border-color: #3498db;
 }
 
+/* ── 運行按鈕區 ── */
+.run-panel {
+  margin-bottom: 10px;
+}
+
+.btn-run {
+  width: 100%;
+  padding: 10px;
+  background: #27ae60;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+
+.btn-run:hover {
+  background: #219a52;
+}
+
+.btn-run:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
+}
+
+.run-status {
+  font-size: 12px;
+  margin-top: 6px;
+  min-height: 16px;
+  color: #666;
+  text-align: center;
+}
+
+/* ── Console log 區塊 ── */
+.console-panel {
+  margin-bottom: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.console-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 8px;
+  background: #2c3e50;
+  color: #ecf0f1;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.btn-clear {
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid #7f8c8d;
+  border-radius: 3px;
+  color: #bdc3c7;
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.2s;
+}
+
+.btn-clear:hover {
+  background: #7f8c8d;
+  color: white;
+}
+
+.console-log {
+  height: 110px;
+  overflow-y: auto;
+  background: #1a252f;
+  padding: 6px 8px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.console-log:empty::before {
+  content: '（尚無日誌）';
+  color: #4a6070;
+}
+
+.log-line {
+  margin-bottom: 2px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-line.info  { color: #82b4ff; }
+.log-line.ok    { color: #2ecc71; }
+.log-line.warn  { color: #f39c12; }
+.log-line.error { color: #e74c3c; }
+.log-line.dim   { color: #7f8c8d; }
+
 /* Toggle switch */
 .toggle-label {
   display: flex;

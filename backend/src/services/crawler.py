@@ -2,6 +2,7 @@
 爬蟲服務 - 從 104 人力銀行爬取職位信息
 """
 
+import os
 import requests
 from bs4 import BeautifulSoup
 import json
@@ -176,9 +177,6 @@ class JobCrawler:
                 json.dump(self.jobs_data, f, ensure_ascii=False, indent=2)
             
             logger.info(f'數據已保存到 {filename}')
-        
+
         except Exception as e:
             logger.error(f'保存數據失敗: {str(e)}')
-
-
-import os

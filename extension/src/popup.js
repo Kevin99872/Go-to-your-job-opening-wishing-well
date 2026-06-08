@@ -3,6 +3,182 @@
  * 處理擴充功能設定介面
  */
 
+// ══════════════════════════════════════════════════════════
+// Console log 工具
+// ══════════════════════════════════════════════════════════
+const logEl = document.getElementById('console-log');
+
+function popupLog(type, msg) {
+  const line = document.createElement('div');
+  line.className = `log-line ${type}`;
+  const time = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+  const prefix = { info: 'ℹ', ok: '✓', warn: '⚠', error: '✗', dim: '·' }[type] ?? '·';
+  line.textContent = `[${time}] ${prefix} ${msg}`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+document.getElementById('clear-log').addEventListener('click', () => {
+  logEl.innerHTML = '';
+});
+
+// 接收 background.js 轉發的 log
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === 'BG_LOG') {
+    popupLog(msg.logType || 'dim', msg.msg);
+  }
+});
+
+// ── 立即分析按鈕 ──────────────────────────────────────────
+document.getElementById('run-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('run-btn');
+  const statusEl = document.getElementById('run-status');
+
+  btn.disabled = true;
+  statusEl.textContent = '⏳ 正在分析…';
+  popupLog('info', '手動觸發分析…');
+
+  try {
+    // 取得目前 active tab
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+    if (!tab) {
+      popupLog('error', '找不到目前分頁');
+      statusEl.textContent = '❌ 找不到分頁';
+      return;
+    }
+
+    if (!tab.url?.includes('104.com.tw')) {
+      popupLog('warn', `目前頁面不是 104（${tab.url?.split('/')[2] ?? '未知'}）`);
+      statusEl.textContent = '⚠️ 請先前往 104.com.tw';
+      return;
+    }
+
+    popupLog('dim', `分頁：${tab.url.split('?')[0]}`);
+
+    // ── 步驟1：深度 DOM 診斷 ─────────────────────────────
+    const diagResults = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const report = {};
+
+        // 1. 計數各種選擇器
+        const selectors = {
+          'article':               document.querySelectorAll('article').length,
+          'li':                    document.querySelectorAll('li').length,
+          '[data-jobno]':          document.querySelectorAll('[data-jobno]').length,
+          '[data-job-id]':         document.querySelectorAll('[data-job-id]').length,
+          '.b-list-box':           document.querySelectorAll('.b-list-box').length,
+          '.b-block':              document.querySelectorAll('.b-block').length,
+          '.job-list-item':        document.querySelectorAll('.job-list-item').length,
+          '[class*="job-list"]':   document.querySelectorAll('[class*="job-list"]').length,
+          '[class*="b-block"]':    document.querySelectorAll('[class*="b-block"]').length,
+          'h2 a':                  document.querySelectorAll('h2 a').length,
+          'a[href*="/job/"]':      document.querySelectorAll('a[href*="/job/"]').length,
+          'a[href*="jobno"]':      document.querySelectorAll('a[href*="jobno"]').length,
+        };
+        report.selectors = selectors;
+
+        // 2. 取前5個 <a> 的 href，找出職缺連結模式
+        const allLinks = Array.from(document.querySelectorAll('a[href]'));
+        report.sampleHrefs = allLinks
+          .map(a => a.getAttribute('href'))
+          .filter(h => h && !h.startsWith('#') && !h.startsWith('javascript'))
+          .slice(0, 20);
+
+        // 3. 取第一個 h2 的資訊
+        const firstH2 = document.querySelector('h2');
+        if (firstH2) {
+          report.firstH2Text = firstH2.textContent.trim().substring(0, 50);
+          report.firstH2Html = firstH2.outerHTML.substring(0, 200);
+        }
+
+        // 4. 取第一個 article 或 [class*=job] 的 class 和結構
+        const firstArticle = document.querySelector('article');
+        if (firstArticle) {
+          report.firstArticleClass = firstArticle.className;
+          report.firstArticleSnippet = firstArticle.outerHTML.substring(0, 400);
+        }
+
+        // 5. 全部 li 裡，找出文字最長的前3個（可能是職缺卡片）
+        const allLi = Array.from(document.querySelectorAll('li'))
+          .filter(li => li.innerText?.length > 50)
+          .sort((a, b) => b.innerText.length - a.innerText.length)
+          .slice(0, 3);
+        report.topLi = allLi.map(li => ({
+          cls: li.className.substring(0, 80),
+          snippet: li.outerHTML.substring(0, 300)
+        }));
+
+        return report;
+      }
+    });
+
+    const diag = diagResults?.[0]?.result;
+    if (diag) {
+      popupLog('info', '── DOM 診斷 ──');
+      Object.entries(diag.selectors || {}).forEach(([sel, cnt]) => {
+        if (cnt > 0) popupLog('ok',  `${cnt}  ${sel}`);
+      });
+      if (diag.firstH2Html) popupLog('info', `h2: ${diag.firstH2Html.substring(0, 100)}`);
+      if (diag.firstArticleClass) popupLog('info', `article.class: ${diag.firstArticleClass.substring(0, 80)}`);
+      (diag.topLi || []).forEach((li, i) => popupLog('info', `li[${i}].class: ${li.cls}`));
+      // 顯示包含 job 關鍵字的 href
+      const jobHrefs = (diag.sampleHrefs || []).filter(h => /job|cust|jobno/i.test(h));
+      if (jobHrefs.length) {
+        popupLog('ok', '職缺相關連結:');
+        jobHrefs.slice(0, 5).forEach(h => popupLog('dim', h.substring(0, 100)));
+      } else {
+        popupLog('warn', 'href 樣本: ' + (diag.sampleHrefs || []).slice(0, 5).join(' | '));
+      }
+    }
+
+    // ── 步驟2：清除舊標記並觸發掃描 ────────────────────
+    const scanResults = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        // 移除所有徽章
+        document.querySelectorAll('.twra-badge, .twra-stats, .twra-loading').forEach(el => el.remove());
+        // 移除所有 data-twra-* 屬性（新版用 data-twra-{title} 而非 data-twra-done）
+        document.querySelectorAll('*').forEach(el => {
+          [...el.attributes]
+            .filter(a => a.name.startsWith('data-twra-'))
+            .forEach(a => el.removeAttribute(a.name));
+        });
+        // 清除分析快取，讓重新分析能重新執行
+        if (typeof analyzedSet !== 'undefined') analyzedSet.clear();
+        if (typeof titleResultMap !== 'undefined') titleResultMap.clear();
+
+        if (typeof scanJobListings === 'function') {
+          scanJobListings();
+          return { triggered: true };
+        }
+        return { triggered: false };
+      }
+    });
+
+    const triggered = scanResults?.[0]?.result?.triggered;
+    if (triggered) {
+      popupLog('ok', '已觸發重新掃描');
+      statusEl.textContent = '✅ 分析中，請查看頁面上的徽章';
+    } else {
+      popupLog('warn', 'content script 未就緒，重新注入…');
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['src/content.js']
+      });
+      popupLog('ok', 'content script 已重新注入');
+      statusEl.textContent = '✅ 已重新注入，請稍等';
+    }
+  } catch (e) {
+    popupLog('error', `執行失敗：${e.message}`);
+    statusEl.textContent = `❌ ${e.message}`;
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { statusEl.textContent = ''; }, 4000);
+  }
+});
+
 // ── 標籤切換 ──────────────────────────────────────────────
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -178,8 +354,8 @@ chrome.storage.local.get(
         if (result.ollamaModel) {
           document.getElementById('ollama-model-select').value = result.ollamaModel;
         }
-      } catch (e) { /* 離線時靜默失敗 */ 
-        setStatus(' 重新整理失敗（${e.message}）');
+      } catch (e) { /* 離線時靜默失敗 */
+        setStatus('ollama-status', 'error', `❌ 無法載入模型（${e.message}）`);
       }
     }
   }
