@@ -8,27 +8,27 @@
 </head>
 <body>
     <div class="container">
-        <h1>🎯 台灣求職避雷器</h1>
+        <h1> 台灣求職避雷器</h1>
         
         <!-- 立即分析按鈕區 -->
         <div class="run-panel">
-            <button id="run-btn" class="btn-run">▶ 立即分析此頁面</button>
+            <button id="run-btn" class="btn-run"> 立即分析此頁面</button>
             <div id="run-status" class="run-status"></div>
         </div>
 
         <!-- Console log 區塊 -->
         <div class="console-panel">
             <div class="console-header">
-                <span>📋 執行日誌</span>
+                <span>執行日誌</span>
                 <button id="clear-log" class="btn-clear">清除</button>
             </div>
             <div id="console-log" class="console-log"></div>
         </div>
 
         <div class="tabs">
-            <button class="tab-btn active" data-tab="settings">⚙️ 設定</button>
-            <button class="tab-btn" data-tab="connection">🔌 連線</button>
-            <button class="tab-btn" data-tab="about">ℹ️ 關於</button>
+            <button class="tab-btn active" data-tab="settings"> 設定</button>
+            <button class="tab-btn" data-tab="connection"> 連線</button>
+            <button class="tab-btn" data-tab="about">關於</button>
         </div>
 
         <!-- 設定標籤 -->
@@ -59,7 +59,7 @@
                 <input type="text" id="local-url" placeholder="http://localhost:11434" class="hidden">
             </div>
 
-            <button id="save-btn" class="btn-primary">💾 保存設定</button>
+            <button id="save-btn" class="btn-primary">保存設定</button>
             
             <div id="status" class="status-message"></div>
 
@@ -114,8 +114,30 @@
                 </div>
             </div>
 
-            <button id="save-connection-btn" class="btn-primary">💾 保存連線設定</button>
+            <button id="save-connection-btn" class="btn-primary">保存連線設定</button>
             <div id="conn-save-status" class="status-message"></div>
+
+            <!-- LSTM 本地模型 -->
+            <h2>本地訓練模型 (LSTM)</h2>
+            <div class="config-group">
+                <label class="toggle-label">
+                    <span>啟用本地 LSTM 模型篩選</span>
+                    <label class="switch">
+                        <input type="checkbox" id="use-lstm" checked>
+                        <span class="slider"></span>
+                    </label>
+                </label>
+                <p class="hint-text">開啟後，每筆職缺會額外顯示「好缺／普通／屎缺」預測標籤</p>
+            </div>
+            <div class="config-group">
+                <div class="input-row">
+                    <button id="check-lstm" class="btn-test">檢查模型狀態</button>
+                    <div id="lstm-status" class="conn-status"></div>
+                </div>
+                <p class="hint-text">
+                    模型未就緒時請執行：<code>python ml/train_lstm.py</code>
+                </p>
+            </div>
         </div>
 
         <!-- 關於標籤 -->
@@ -128,10 +150,10 @@
                 <strong>功能：</strong>
             </p>
             <ul>
-                <li>✓ 自動分析 104 上的職位</li>
-                <li>✓ 比對薪資標準</li>
-                <li>✓ 標記風險職缺</li>
-                <li>✓ 支援本地 AI 模型</li>
+                <li>自動分析 104 上的職位</li>
+                <li>比對薪資標準</li>
+                <li>標記風險職缺</li>
+                <li>支援本地 AI 模型</li>
             </ul>
             <p>
                 <strong>開源地址：</strong> 

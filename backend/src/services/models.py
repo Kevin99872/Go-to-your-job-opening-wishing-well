@@ -47,7 +47,7 @@ class ModelManager:
             if model_type == 'openai':
                 try:
                     import openai
-                    openai.api_key = self.config.get('api_key')
+                    openai.api_key = self.config.get('sk-852cb3cc1f49455196aa1006fa3d64dc525331a8b5264670')
                     self.client = openai
                     logger.info('OpenAI 客戶端已初始化')
                 except ImportError:

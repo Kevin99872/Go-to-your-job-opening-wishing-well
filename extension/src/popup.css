@@ -401,3 +401,20 @@ input:checked + .slider:before {
   transform: translateX(18px);
 }
 
+
+
+/* LSTM 說明文字 */
+.hint-text {
+  font-size: 11px;
+  color: #888;
+  margin-top: 5px;
+  line-height: 1.5;
+}
+.hint-text code {
+  background: #eee;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 10px;
+  color: #c0392b;
+}

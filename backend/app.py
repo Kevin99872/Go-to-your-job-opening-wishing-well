@@ -16,6 +16,7 @@ import logging
 from src.services.crawler import JobCrawler
 from src.services.analyzer import JobAnalyzer
 from src.services.models import ModelManager
+from src.services.lstm_predictor import get_predictor
 
 # 載入環境變數
 load_dotenv()
@@ -190,6 +191,157 @@ def ollama_generate():
     except Exception as e:
         logger.error(f'Ollama 生成失敗: {str(e)}')
         return jsonify({'error': str(e)}), 503
+
+
+# ════════════════════════════════════════════════════════════════════
+#  LSTM 本地模型端點
+# ════════════════════════════════════════════════════════════════════
+
+@app.route('/api/lstm/status', methods=['GET'])
+def lstm_status():
+    """確認 LSTM 模型是否已載入"""
+    predictor = get_predictor()
+    return jsonify({
+        'ready':   predictor.is_ready,
+        'message': 'LSTM 模型就緒' if predictor.is_ready else '模型未載入，請先執行 ml/train_lstm.py'
+    })
+
+
+@app.route('/api/lstm/predict', methods=['POST'])
+def lstm_predict():
+    """
+    單筆職缺 LSTM 預測
+
+    Body (JSON):
+        {
+          "jobTitle":    "後端工程師",
+          "salaryMin":   50000,
+          "salaryMax":   70000,
+          "salaryText":  "月薪 50,000～70,000元",   // 可選
+          "descSnippet": "...",                      // 可選
+          "overtimeHint": 1                          // 0~3，可選
+        }
+
+    Response:
+        {
+          "label": 0,
+          "class": "好缺",
+          "probabilities": {"好缺": 0.72, "普通": 0.20, "屎缺": 0.08},
+          "features": {...},
+          "model": "lstm"
+        }
+    """
+    try:
+        data = request.json or {}
+        if not data.get('jobTitle') and not data.get('salaryMin'):
+            return jsonify({'error': '至少需要 jobTitle 或 salaryMin'}), 400
+
+        predictor = get_predictor()
+        result    = predictor.predict_from_job(data)
+
+        if 'error' in result:
+            return jsonify(result), 503
+
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f'LSTM 預測失敗: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/lstm/predict-batch', methods=['POST'])
+def lstm_predict_batch():
+    """
+    批次職缺 LSTM 預測
+
+    Body (JSON):
+        { "jobs": [ {...}, {...} ] }
+
+    Response:
+        { "results": [ {...}, {...} ], "count": 2 }
+    """
+    try:
+        data = request.json or {}
+        jobs = data.get('jobs', [])
+
+        if not jobs:
+            return jsonify({'error': '缺少 jobs 陣列'}), 400
+        if len(jobs) > 100:
+            return jsonify({'error': '單次最多 100 筆'}), 400
+
+        predictor = get_predictor()
+        results   = predictor.predict_batch(jobs)
+
+        return jsonify({'results': results, 'count': len(results)})
+
+    except Exception as e:
+        logger.error(f'LSTM 批次預測失敗: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/crawl-and-predict', methods=['POST'])
+def crawl_and_predict():
+    """
+    一鍵：爬蟲 → LSTM 預測 → 回傳篩選結果
+
+    Body (JSON):
+        {
+          "keywords":   "後端工程師",   // 搜尋關鍵字
+          "maxPages":   3,              // 爬幾頁（預設 3）
+          "filterClass": "好缺"         // 只回傳此類別（可選）
+        }
+    """
+    try:
+        data     = request.json or {}
+        keywords = data.get('keywords', '軟體工程師')
+        max_pages = int(data.get('maxPages', 3))
+        filter_cls = data.get('filterClass')  # "好缺" | "普通" | "屎缺" | None
+
+        # 1. 爬蟲
+        logger.info(f'crawl-and-predict: keywords={keywords}, pages={max_pages}')
+        crawl_result = crawler.crawl_104(keywords=keywords, max_pages=max_pages)
+        jobs = crawler.get_jobs()
+
+        if not jobs:
+            return jsonify({'error': '爬蟲無結果', 'crawl': crawl_result}), 404
+
+        # 2. LSTM 批次預測
+        predictor = get_predictor()
+        results   = predictor.predict_batch(jobs)
+
+        # 3. 合併職缺資訊 + 預測結果
+        combined = []
+        for job, pred in zip(jobs, results):
+            combined.append({
+                'jobTitle':      job.get('jobTitle'),
+                'company':       job.get('company'),
+                'salaryText':    job.get('salaryText'),
+                'jobUrl':        job.get('jobUrl'),
+                'location':      job.get('location'),
+                'prediction':    pred,
+            })
+
+        # 4. 篩選
+        if filter_cls:
+            combined = [c for c in combined
+                        if c['prediction'].get('class') == filter_cls]
+
+        # 依好缺機率由高到低排序
+        combined.sort(
+            key=lambda c: c['prediction'].get('probabilities', {}).get('好缺', 0),
+            reverse=True
+        )
+
+        return jsonify({
+            'total_crawled':   len(jobs),
+            'total_returned':  len(combined),
+            'filter':          filter_cls,
+            'jobs':            combined,
+        })
+
+    except Exception as e:
+        logger.error(f'crawl-and-predict 失敗: {str(e)}')
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

@@ -12,7 +12,7 @@ function popupLog(type, msg) {
   const line = document.createElement('div');
   line.className = `log-line ${type}`;
   const time = new Date().toLocaleTimeString('zh-TW', { hour12: false });
-  const prefix = { info: 'ℹ', ok: '✓', warn: '⚠', error: '✗', dim: '·' }[type] ?? '·';
+  const prefix = { info: ' ', ok: ' ', warn: ' ', error:  ' ', dim: ' ' }[type] ?? '·';
   line.textContent = `[${time}] ${prefix} ${msg}`;
   logEl.appendChild(line);
   logEl.scrollTop = logEl.scrollHeight;
@@ -35,7 +35,7 @@ document.getElementById('run-btn').addEventListener('click', async () => {
   const statusEl = document.getElementById('run-status');
 
   btn.disabled = true;
-  statusEl.textContent = '⏳ 正在分析…';
+  statusEl.textContent = ' 正在分析…';
   popupLog('info', '手動觸發分析…');
 
   try {
@@ -44,13 +44,13 @@ document.getElementById('run-btn').addEventListener('click', async () => {
 
     if (!tab) {
       popupLog('error', '找不到目前分頁');
-      statusEl.textContent = '❌ 找不到分頁';
+      statusEl.textContent = ' 找不到分頁';
       return;
     }
 
     if (!tab.url?.includes('104.com.tw')) {
       popupLog('warn', `目前頁面不是 104（${tab.url?.split('/')[2] ?? '未知'}）`);
-      statusEl.textContent = '⚠️ 請先前往 104.com.tw';
+      statusEl.textContent = ' 請先前往 104.com.tw';
       return;
     }
 
@@ -160,7 +160,7 @@ document.getElementById('run-btn').addEventListener('click', async () => {
     const triggered = scanResults?.[0]?.result?.triggered;
     if (triggered) {
       popupLog('ok', '已觸發重新掃描');
-      statusEl.textContent = '✅ 分析中，請查看頁面上的徽章';
+      statusEl.textContent = '分析中，請查看頁面上的徽章';
     } else {
       popupLog('warn', 'content script 未就緒，重新注入…');
       await chrome.scripting.executeScript({
@@ -168,11 +168,11 @@ document.getElementById('run-btn').addEventListener('click', async () => {
         files: ['src/content.js']
       });
       popupLog('ok', 'content script 已重新注入');
-      statusEl.textContent = '✅ 已重新注入，請稍等';
+      statusEl.textContent = '已重新注入，請稍等';
     }
   } catch (e) {
     popupLog('error', `執行失敗：${e.message}`);
-    statusEl.textContent = `❌ ${e.message}`;
+    statusEl.textContent = ` ${e.message}`;
   } finally {
     btn.disabled = false;
     setTimeout(() => { statusEl.textContent = ''; }, 4000);
@@ -261,17 +261,17 @@ async function testBackend() {
   const url = (document.getElementById('backend-url').value || DEFAULT_BACKEND).replace(/\/$/, '');
   const btn = document.getElementById('test-backend');
   btn.disabled = true;
-  setStatus('backend-status', 'checking', '⏳ 測試中…');
+  setStatus('backend-status', 'checking', ' 測試中…');
   try {
     const res = await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(5000) });
     if (res.ok) {
       const data = await res.json();
-      setStatus('backend-status', 'success', `✅ 已連線：${data.service || '後端服務'}`);
+      setStatus('backend-status', 'success', `已連線：${data.service || '後端服務'}`);
     } else {
-      setStatus('backend-status', 'error', `❌ 伺服器回應 ${res.status}`);
+      setStatus('backend-status', 'error', `伺服器回應 ${res.status}`);
     }
   } catch (e) {
-    setStatus('backend-status', 'error', `❌ 無法連線（${e.message}）`);
+    setStatus('backend-status', 'error', `無法連線（${e.message}）`);
   } finally {
     btn.disabled = false;
   }
@@ -301,12 +301,12 @@ async function testOllama() {
   const url = (document.getElementById('ollama-url').value || DEFAULT_OLLAMA).replace(/\/$/, '');
   const btn = document.getElementById('test-ollama');
   btn.disabled = true;
-  setStatus('ollama-status', 'checking', '⏳ 測試中…');
+  setStatus('ollama-status', 'checking', ' 測試中…');
   try {
     const models = await loadOllamaModels(url);
-    setStatus('ollama-status', 'success', `✅ 已連線，找到 ${models.length} 個模型`);
+    setStatus('ollama-status', 'success', ` 已連線，找到 ${models.length} 個模型`);
   } catch (e) {
-    setStatus('ollama-status', 'error', `❌ 無法連線（${e.message}）`);
+    setStatus('ollama-status', 'error', ` 無法連線（${e.message}）`);
   } finally {
     btn.disabled = false;
   }
@@ -334,19 +334,20 @@ document.getElementById('refresh-models').addEventListener('click', async () => 
   const url = document.getElementById('ollama-url').value || DEFAULT_OLLAMA;
   try {
     await loadOllamaModels(url);
-    setStatus('ollama-status', 'success', '✅ 模型列表已更新');
+    setStatus('ollama-status', 'success', ' 模型列表已更新');
   } catch (e) {
-    setStatus('ollama-status', 'error', `❌ 重新整理失敗（${e.message}）`);
+    setStatus('ollama-status', 'error', ` 重新整理失敗（${e.message}）`);
   }
 });
 
 // 載入連線頁既有設定
 chrome.storage.local.get(
-  ['backendUrl', 'ollamaUrl', 'ollamaModel', 'directMode'],
+  ['backendUrl', 'ollamaUrl', 'ollamaModel', 'directMode', 'useLstm'],
   async (result) => {
-    document.getElementById('backend-url').value = result.backendUrl || DEFAULT_BACKEND;
-    document.getElementById('ollama-url').value  = result.ollamaUrl  || DEFAULT_OLLAMA;
+    document.getElementById('backend-url').value   = result.backendUrl || DEFAULT_BACKEND;
+    document.getElementById('ollama-url').value    = result.ollamaUrl  || DEFAULT_OLLAMA;
     document.getElementById('direct-mode').checked = result.directMode === true;
+    document.getElementById('use-lstm').checked    = result.useLstm !== false; // 預設開啟
 
     if (result.ollamaUrl) {
       try {
@@ -354,9 +355,57 @@ chrome.storage.local.get(
         if (result.ollamaModel) {
           document.getElementById('ollama-model-select').value = result.ollamaModel;
         }
-      } catch (e) { /* 離線時靜默失敗 */
-        setStatus('ollama-status', 'error', `❌ 無法載入模型（${e.message}）`);
+      } catch (e) {
+        setStatus('ollama-status', 'error', ` 無法載入模型（${e.message}）`);
       }
     }
   }
 );
+
+// ══════════════════════════════════════════════════════════
+// LSTM 模型狀態
+// ══════════════════════════════════════════════════════════
+
+async function checkLstmStatus() {
+  const btn = document.getElementById('check-lstm');
+  btn.disabled = true;
+  setStatus('lstm-status', 'checking', ' 檢查中…');
+  try {
+    // 透過 background.js 查詢（避免 CORS）
+    const response = await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ type: 'CHECK_LSTM_STATUS' }, (res) => {
+        if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+        resolve(res);
+      });
+    });
+
+    if (response?.ready) {
+      setStatus('lstm-status', 'success', ' 模型已就緒，可使用 LSTM 預測');
+      popupLog('ok', 'LSTM 模型載入成功');
+    } else {
+      const msg = response?.message || '模型未載入';
+      setStatus('lstm-status', 'error', ` ${msg}`);
+      popupLog('warn', `LSTM：${msg}`);
+    }
+  } catch (e) {
+    setStatus('lstm-status', 'error', ` 無法檢查（${e.message}）`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('check-lstm').addEventListener('click', checkLstmStatus);
+
+// LSTM 開關變更時即時儲存
+document.getElementById('use-lstm').addEventListener('change', (e) => {
+  chrome.storage.local.set({ useLstm: e.target.checked }, () => {
+    popupLog('info', `LSTM 預測：${e.target.checked ? '已開啟' : '已關閉'}`);
+  });
+});
+
+// 保存連線設定時一起存 useLstm
+const _origSaveConn = document.getElementById('save-connection-btn').onclick;
+document.getElementById('save-connection-btn').addEventListener('click', () => {
+  const useLstm = document.getElementById('use-lstm').checked;
+  chrome.storage.local.set({ useLstm });
+});

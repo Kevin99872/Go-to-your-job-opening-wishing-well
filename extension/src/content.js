@@ -93,27 +93,70 @@ function scanJobLinks() {
 // ══════════════════════════════════════════════════════
 // 渲染徽章（直接插入 link 旁邊）
 // ══════════════════════════════════════════════════════
+
+// 規則分析徽章設定
+const RISK_LABELS = { high: '⚠ 高風險', medium: '⚡ 注意', low: '✅ 正常', unknown: '❓' };
+const RISK_COLORS = { high: '#ff4757', medium: '#ffa502', low: '#2ed573', unknown: '#747d8c' };
+
+// LSTM 分類徽章設定
+const LSTM_LABELS      = { '好缺': '🟢 好缺', '普通': '🟡 普通', '屎缺': '🔴 屎缺' };
+const LSTM_COLORS      = { '好缺': '#2ed573', '普通': '#ffa502', '屎缺': '#ff4757'  };
+const LSTM_TEXT_COLORS = { '好缺': '#fff',     '普通': '#333',    '屎缺': '#fff'    };
+
+function _badgeStyle(bg, color, extra = '') {
+  return [
+    'display:inline-block', 'padding:1px 7px', 'border-radius:10px',
+    'font-size:11px', 'font-weight:700', 'vertical-align:middle', 'margin-left:6px',
+    `background:${bg}`, `color:${color}`,
+    'cursor:default', 'white-space:nowrap', 'line-height:1.8',
+    'position:relative', 'z-index:9999',
+    extra
+  ].filter(Boolean).join(';');
+}
+
 function renderBadgeOnLink(linkEl, result) {
   if (!linkEl || linkEl.parentElement?.querySelector('.twra-badge')) return;
 
-  const { riskLevel = 'unknown', score = 0, reasons = [], recommendation = '' } = result;
-  const LABELS = { high: '⚠ 屎缺', medium: '⚡ 注意', low: '✅ 正常', unknown: '❓' };
-  const COLORS = { high: '#ff4757', medium: '#ffa502', low: '#2ed573', unknown: '#747d8c' };
+  const {
+    riskLevel = 'unknown', score = 0, reasons = [], recommendation = '',
+    lstmClass, lstmProbabilities
+  } = result;
 
+  // ── 規則分析徽章 ───────────────────────────────────────
   const badge = document.createElement('span');
   badge.className = `twra-badge twra-badge--${riskLevel}`;
-  badge.textContent = LABELS[riskLevel] ?? '❓';
-  badge.title = [`風險：${score}/100`, ...reasons,
+  badge.textContent = RISK_LABELS[riskLevel] ?? '❓';
+  badge.title = [`風險分數：${score}/100`, ...reasons,
     recommendation ? `💡 ${recommendation}` : ''].filter(Boolean).join('\n');
-  badge.style.cssText = [
-    'display:inline-block', 'padding:1px 7px', 'border-radius:10px',
-    'font-size:11px', 'font-weight:700', 'vertical-align:middle', 'margin-left:6px',
-    `background:${COLORS[riskLevel] ?? '#747d8c'}`,
-    `color:${riskLevel === 'medium' ? '#333' : '#fff'}`,
-    'cursor:default', 'white-space:nowrap', 'line-height:1.8',
-    'position:relative', 'z-index:9999'
-  ].join(';');
+  badge.style.cssText = _badgeStyle(
+    RISK_COLORS[riskLevel] ?? '#747d8c',
+    riskLevel === 'medium' ? '#333' : '#fff'
+  );
   linkEl.after(badge);
+
+  // ── LSTM 分類徽章（有結果才顯示）──────────────────────
+  if (lstmClass && LSTM_LABELS[lstmClass]) {
+    const prob = lstmProbabilities?.[lstmClass];
+    const pct  = prob != null ? ` ${Math.round(prob * 100)}%` : '';
+
+    const lstmBadge = document.createElement('span');
+    lstmBadge.className = `twra-badge twra-badge--lstm twra-badge--lstm-${lstmClass}`;
+    lstmBadge.textContent = LSTM_LABELS[lstmClass] + pct;
+
+    const probLines = lstmProbabilities
+      ? Object.entries(lstmProbabilities)
+          .sort((a, b) => b[1] - a[1])
+          .map(([k, v]) => `  ${k}：${Math.round(v * 100)}%`)
+          .join('\n')
+      : '';
+    lstmBadge.title = `🤖 本地 LSTM 模型預測\n${probLines}`;
+    lstmBadge.style.cssText = _badgeStyle(
+      LSTM_COLORS[lstmClass],
+      LSTM_TEXT_COLORS[lstmClass],
+      'margin-left:3px'
+    );
+    badge.after(lstmBadge);
+  }
 }
 
 // ══════════════════════════════════════════════════════
