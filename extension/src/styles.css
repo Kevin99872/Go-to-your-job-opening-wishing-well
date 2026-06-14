@@ -30,6 +30,26 @@
   to   { opacity: 1; transform: scale(1); }
 }
 
+/* ── LSTM 分類徽章 ──────────────────────────────────────── */
+.twra-badge--lstm          { letter-spacing: 0.3px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+.twra-badge--lstm-好缺     { background: #2ed573; color: #fff; }
+.twra-badge--lstm-普通     { background: #ffa502; color: #333; }
+.twra-badge--lstm-屎缺     { background: #ff4757; color: #fff; }
+
+/* ── Loading 佔位 ───────────────────────────────────────── */
+.twra-loading {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 12px;
+  vertical-align: middle;
+  opacity: 0.6;
+  animation: twra-pulse 1s ease-in-out infinite;
+}
+@keyframes twra-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 0.2; }
+}
+
 /* ── 相容舊版 class（保留向後相容） ─────────────────────── */
 .risk-badge { display: inline-block; padding: 4px 8px; border-radius: 4px;
   font-weight: bold; font-size: 12px; margin-left: 8px; }

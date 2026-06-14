@@ -18,7 +18,7 @@ function bgLog(type, msg) {
 // 首次安裝提示
 chrome.storage.local.get(['apiKey', 'directMode', 'backendUrl'], (result) => {
   if (!result.apiKey && !result.directMode && !result.backendUrl) {
-    bgLog('info', '請至「🔌 連線」頁設定後端 API 或 Ollama 端口');
+    bgLog('info', '請至「連線」頁設定後端 API 或 Ollama 端口');
   }
 });
 
@@ -68,23 +68,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 async function analyzeJob(jobData) {
   const cfg = await getConnectionConfig();
+  const { jobTitle } = jobData;
+  bgLog('dim', `分析「${jobTitle}」…`);
 
-  // ── 直接 Ollama 模式（不經後端）──────────────────────
-  if (cfg.directMode) {
-    const base = await analyzeJobDirect(jobData, cfg);
-    // 直接模式下 LSTM 仍可走後端
-    if (cfg.useLstm) {
-      const lstm = await callLstmPredict(jobData, cfg.backendUrl);
-      if (lstm) return mergeLstmResult(base, lstm);
+  // ── LSTM 優先（預設開啟）────────────────────────────
+  if (cfg.useLstm) {
+    const lstm = await callLstmPredict(jobData, cfg.backendUrl);
+    if (lstm) {
+      // LSTM 成功：直接以 LSTM 為主要結果，不再呼叫後端
+      const base = { riskLevel: 'unknown', score: 50, reasons: [], recommendation: '', source: 'lstm' };
+      return mergeLstmResult(base, lstm);
     }
-    return base;
+    bgLog('warn', 'LSTM 不可用，退回後端 / 本地規則');
   }
 
-  // ── 後端 API 模式 ─────────────────────────────────────
-  let base;
+  // ── 直接 Ollama 模式（LSTM 失敗時的備援）────────────
+  if (cfg.directMode) {
+    return analyzeJobDirect(jobData, cfg);
+  }
+
+  // ── 後端 API 模式（LSTM 失敗時的備援）───────────────
   try {
-    const { jobTitle, salary, company, description } = jobData;
-    bgLog('dim', `分析「${jobTitle}」…`);
+    const { salary, company, description } = jobData;
     const salaryStats = await getSalaryStats(jobTitle, cfg.backendUrl);
 
     const response = await fetch(`${cfg.backendUrl}/api/analyze`, {
@@ -95,21 +100,14 @@ async function analyzeJob(jobData) {
     });
 
     if (!response.ok) throw new Error(`後端 API 回應 ${response.status}`);
-    base = await response.json();
+    const base = await response.json();
     bgLog('ok', `後端分析完成：${jobTitle} → ${base.riskLevel} (${base.score}分)`);
+    return base;
 
   } catch (e) {
     bgLog('warn', `後端不可用 (${e.message})，改用本地規則`);
-    base = analyzeJobLocal(jobData);
+    return analyzeJobLocal(jobData);
   }
-
-  // ── LSTM 預測（疊加到基礎結果上）────────────────────
-  if (cfg.useLstm) {
-    const lstm = await callLstmPredict(jobData, cfg.backendUrl);
-    if (lstm) return mergeLstmResult(base, lstm);
-  }
-
-  return base;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -156,14 +154,23 @@ async function callLstmPredict(jobData, backendUrl) {
 
 /**
  * 把 LSTM 結果合併進基礎分析結果
+ * LSTM class 為主要分類依據，覆寫 riskLevel / score
  */
 function mergeLstmResult(base, lstm) {
+  const classMap = {
+    '好缺': { riskLevel: 'low',    score: 80, recommendation: '條件良好，值得投遞' },
+    '普通': { riskLevel: 'medium', score: 55, recommendation: '審慎考慮，面試時仔細確認工作條件' },
+    '屎缺': { riskLevel: 'high',   score: 20, recommendation: '不建議投遞，建議繼續尋找其他機會' },
+  };
+  const override = classMap[lstm.class] || {};
   return {
     ...base,
-    lstmClass:         lstm.class,          // "好缺" | "普通" | "屎缺"
-    lstmLabel:         lstm.label,          // 0 | 1 | 2
-    lstmProbabilities: lstm.probabilities,  // { 好缺: 0.72, 普通: 0.20, 屎缺: 0.08 }
+    ...override,                            // LSTM 覆寫 riskLevel / score / recommendation
+    lstmClass:         lstm.class,
+    lstmLabel:         lstm.label,
+    lstmProbabilities: lstm.probabilities,
     lstmFeatures:      lstm.features,
+    source:            'lstm',
   };
 }
 

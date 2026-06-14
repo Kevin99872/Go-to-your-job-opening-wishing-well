@@ -35,7 +35,7 @@ document.getElementById('run-btn').addEventListener('click', async () => {
   const statusEl = document.getElementById('run-status');
 
   btn.disabled = true;
-  statusEl.textContent = ' 正在分析…';
+  statusEl.textContent = '正在分析...';
   popupLog('info', '手動觸發分析…');
 
   try {
@@ -225,7 +225,7 @@ document.getElementById('save-btn').addEventListener('click', () => {
 
   chrome.storage.local.set({ ...config, autoAnalyze, showStats }, () => {
     const statusDiv = document.getElementById('status');
-    statusDiv.textContent = '✓ 設定已保存';
+    statusDiv.textContent = '設定已保存';
     statusDiv.style.color = 'green';
     setTimeout(() => { statusDiv.textContent = ''; }, 2000);
   });
@@ -261,7 +261,7 @@ async function testBackend() {
   const url = (document.getElementById('backend-url').value || DEFAULT_BACKEND).replace(/\/$/, '');
   const btn = document.getElementById('test-backend');
   btn.disabled = true;
-  setStatus('backend-status', 'checking', ' 測試中…');
+  setStatus('backend-status', 'checking', '測試中...');
   try {
     const res = await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(5000) });
     if (res.ok) {
@@ -301,12 +301,12 @@ async function testOllama() {
   const url = (document.getElementById('ollama-url').value || DEFAULT_OLLAMA).replace(/\/$/, '');
   const btn = document.getElementById('test-ollama');
   btn.disabled = true;
-  setStatus('ollama-status', 'checking', ' 測試中…');
+  setStatus('ollama-status', 'checking', '測試中...');
   try {
     const models = await loadOllamaModels(url);
-    setStatus('ollama-status', 'success', ` 已連線，找到 ${models.length} 個模型`);
+    setStatus('ollama-status', 'success', `已連線，找到 ${models.length} 個模型`);
   } catch (e) {
-    setStatus('ollama-status', 'error', ` 無法連線（${e.message}）`);
+    setStatus('ollama-status', 'error', `無法連線（${e.message}）`);
   } finally {
     btn.disabled = false;
   }
@@ -321,7 +321,7 @@ document.getElementById('save-connection-btn').addEventListener('click', () => {
 
   chrome.storage.local.set({ backendUrl, ollamaUrl, ollamaModel, directMode }, () => {
     const el = document.getElementById('conn-save-status');
-    el.textContent = '✓ 連線設定已保存';
+    el.textContent = '連線設定已保存';
     el.style.color = 'green';
     setTimeout(() => { el.textContent = ''; }, 2000);
   });
@@ -369,7 +369,7 @@ chrome.storage.local.get(
 async function checkLstmStatus() {
   const btn = document.getElementById('check-lstm');
   btn.disabled = true;
-  setStatus('lstm-status', 'checking', ' 檢查中…');
+  setStatus('lstm-status', 'checking', '檢查中...');
   try {
     // 透過 background.js 查詢（避免 CORS）
     const response = await new Promise((resolve, reject) => {
@@ -380,7 +380,7 @@ async function checkLstmStatus() {
     });
 
     if (response?.ready) {
-      setStatus('lstm-status', 'success', ' 模型已就緒，可使用 LSTM 預測');
+      setStatus('lstm-status', 'success', '模型已就緒，可使用 LSTM 預測');
       popupLog('ok', 'LSTM 模型載入成功');
     } else {
       const msg = response?.message || '模型未載入';

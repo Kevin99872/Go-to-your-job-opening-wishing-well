@@ -1,9 +1,6 @@
 /**
- * 台灣求職避雷器 - Content Script (run_at: document_start)
- *
- * 策略：直接掃描 DOM 中所有 href 包含 /job/ 的連結，
- * 不依賴 API 攔截。vue-recycle-scroller 的可見卡片
- * 都在 DOM 裡，MutationObserver 監控滾動時的新卡片。
+ * 台灣求職避雷器 - Content Script
+ * 掃描 104 職缺卡片 → 送 background 分析（規則 + LSTM）→ 渲染雙徽章
  */
 
 // ══════════════════════════════════════════════════════
@@ -24,65 +21,111 @@ function cLog(type, msg) {
 }
 
 // ══════════════════════════════════════════════════════
-// 從 DOM 擷取薪資文字
+// 薪資解析（從文字取出 min / max，單位：元）
 // ══════════════════════════════════════════════════════
-function extractText(el, patterns) {
-  if (!el) return '';
-  // 找包含特定 class 關鍵字的子元素
-  for (const pat of patterns) {
-    const found = el.querySelector(`[class*="${pat}"]`);
-    if (found?.textContent.trim()) return found.textContent.trim();
-  }
-  return '';
+function parseSalaryFromText(text = '') {
+  if (!text) return { min: 0, max: 0 };
+  // 移除千分位，取所有數字段
+  const nums = [...text.replace(/,/g, '').matchAll(/\d+/g)]
+    .map(m => parseInt(m[0]))
+    .filter(n => n > 1000);        // 過濾掉日期/編號等小數字
+  if (!nums.length) return { min: 0, max: 0 };
+  let lo = Math.min(...nums);
+  let hi = Math.max(...nums);
+  // 萬元單位（如 4萬～6萬）
+  if (/萬/.test(text)) { lo *= 10000; hi *= 10000; }
+  return { min: lo, max: hi };
+}
+
+// ══════════════════════════════════════════════════════
+// 加班指數偵測（0=低 1=中低 2=中高 3=高）
+// ══════════════════════════════════════════════════════
+const OT_HIGH   = ['責任制','無休假','需配合加班','假日加班','輪班','大夜班','無限加班'];
+const OT_MEDIUM = ['偶爾加班','彈性工時','專案加班','不定時'];
+const OT_LOW    = ['準時下班','不需加班','週休二日','Work-Life'];
+
+function detectOvertimeHint(text = '') {
+  if (OT_HIGH.some(w => text.includes(w)))   return 3;
+  if (OT_MEDIUM.some(w => text.includes(w))) return 2;
+  if (OT_LOW.some(w => text.includes(w)))    return 0;
+  return 1;
+}
+
+// ══════════════════════════════════════════════════════
+// 從職缺卡片 DOM 擷取結構化資料
+// ══════════════════════════════════════════════════════
+function extractJobDataFromCard(link, card) {
+  // 薪資文字：優先找含 salary/pay/薪 class 的子元素
+  const salaryEl =
+    card?.querySelector('[class*="salary"],[class*="pay"],[class*="wage"],[class*="b-list-tag"]') ||
+    card?.querySelector('[class*="tag"]');
+  const salaryText = salaryEl?.textContent.trim() || '';
+  const { min: salaryMin, max: salaryMax } = parseSalaryFromText(salaryText);
+
+  // 公司名稱
+  const companyEl =
+    card?.querySelector('[class*="cust"],[class*="company"],[class*="corp"],[class*="b-company"]');
+  const company = (companyEl?.textContent.trim() || '').substring(0, 60);
+
+  // 完整卡片文字（供加班偵測 & AI 分析）
+  const fullText = card?.textContent?.replace(/\s+/g, ' ')?.trim() || '';
+
+  return {
+    salary:      salaryText || '薪資未標示',
+    salaryMin,
+    salaryMax,
+    company,
+    description: fullText.substring(0, 500),
+    overtimeHint: detectOvertimeHint(fullText),
+  };
 }
 
 // ══════════════════════════════════════════════════════
 // 主掃描：找所有 /job/ 連結
 // ══════════════════════════════════════════════════════
 function scanJobLinks() {
-  if (!chrome.runtime?.id) return; // extension context 已失效
+  if (!chrome.runtime?.id) return 0;
 
-  // 104 的每個職缺卡片都有 <a href="...104.com.tw/job/XXXXX">
   const links = document.querySelectorAll('a[href*="/job/"]');
   let newCount = 0;
 
   for (const link of links) {
-    const href = link.getAttribute('href') || '';
+    const href  = link.getAttribute('href') || '';
     const jobId = href.match(/\/job\/([a-zA-Z0-9]+)/)?.[1];
     if (!jobId || analyzedSet.has(jobId)) continue;
 
     const title = link.textContent.trim();
     if (!title || title.length < 2 || title.length > 60) continue;
 
-    // 向上找卡片容器（li / article / div.b-block 等）
+    // 向上找卡片容器
     const card = link.closest('li, article, [class*="b-block"], [class*="job-list"], [class*="card"]')
                ?? link.parentElement?.parentElement;
-
-    const salary  = extractText(card, ['salary', 'pay', 'wage', '薪'])
-                 || card?.querySelector('[class*="salary"]')?.textContent.trim()
-                 || '';
-    const company = extractText(card, ['company', 'cust', 'corp', '公司'])
-                 || card?.querySelector('[class*="cust"]')?.textContent.trim()
-                 || '';
 
     analyzedSet.add(jobId);
     newCount++;
 
+    const extra = extractJobDataFromCard(link, card);
+
     const jobData = {
       jobTitle:    title,
       jobId,
-      company:     company.substring(0, 60),
-      salary:      salary  || '薪資未標示',
-      description: card?.textContent?.substring(0, 400) || ''
+      ...extra,
     };
 
-    cLog('dim', `分析：${title}（${jobId}）`);
+    // 先渲染 loading 佔位徽章
+    renderLoadingBadge(link, jobId);
+    cLog('dim', `分析：${title} | 薪 ${extra.salaryMin}~${extra.salaryMax} | OT:${extra.overtimeHint}`);
 
     chrome.runtime.sendMessage({ type: 'ANALYZE_JOB', jobData }, response => {
       if (!chrome.runtime?.id) return;
-      if (chrome.runtime.lastError || !response?.success) return;
+      // 移除 loading 佔位
+      removeLoadingBadge(jobId);
+      if (chrome.runtime.lastError || !response?.success) {
+        cLog('warn', `分析失敗：${title}`);
+        return;
+      }
       titleResultMap.set(jobId, response.result);
-      renderBadgeOnLink(link, response.result);
+      renderBadgeOnLink(link, response.result, jobId);
     });
   }
 
@@ -91,88 +134,120 @@ function scanJobLinks() {
 }
 
 // ══════════════════════════════════════════════════════
-// 渲染徽章（直接插入 link 旁邊）
+// Loading 佔位徽章
 // ══════════════════════════════════════════════════════
-
-// 規則分析徽章設定
-const RISK_LABELS = { high: '⚠ 高風險', medium: '⚡ 注意', low: '✅ 正常', unknown: '❓' };
-const RISK_COLORS = { high: '#ff4757', medium: '#ffa502', low: '#2ed573', unknown: '#747d8c' };
-
-// LSTM 分類徽章設定
-const LSTM_LABELS      = { '好缺': '🟢 好缺', '普通': '🟡 普通', '屎缺': '🔴 屎缺' };
-const LSTM_COLORS      = { '好缺': '#2ed573', '普通': '#ffa502', '屎缺': '#ff4757'  };
-const LSTM_TEXT_COLORS = { '好缺': '#fff',     '普通': '#333',    '屎缺': '#fff'    };
-
-function _badgeStyle(bg, color, extra = '') {
-  return [
-    'display:inline-block', 'padding:1px 7px', 'border-radius:10px',
-    'font-size:11px', 'font-weight:700', 'vertical-align:middle', 'margin-left:6px',
-    `background:${bg}`, `color:${color}`,
-    'cursor:default', 'white-space:nowrap', 'line-height:1.8',
-    'position:relative', 'z-index:9999',
-    extra
-  ].filter(Boolean).join(';');
+function renderLoadingBadge(linkEl, jobId) {
+  if (linkEl.parentElement?.querySelector('.twra-loading')) return;
+  const badge = document.createElement('span');
+  badge.className = 'twra-loading';
+  badge.dataset.jobid = jobId;
+  badge.textContent = '...';
+  badge.style.cssText = 'display:inline-block;margin-left:6px;font-size:12px;vertical-align:middle;opacity:0.6;';
+  linkEl.after(badge);
 }
 
-function renderBadgeOnLink(linkEl, result) {
-  if (!linkEl || linkEl.parentElement?.querySelector('.twra-badge')) return;
+function removeLoadingBadge(jobId) {
+  document.querySelectorAll(`.twra-loading[data-jobid="${jobId}"]`).forEach(el => el.remove());
+}
+
+// ══════════════════════════════════════════════════════
+// 徽章樣式工具
+// ══════════════════════════════════════════════════════
+const RISK_LABELS = { high: '[!] 高風險', medium: '[~] 注意', low: '[OK] 正常', unknown: '[?]' };
+const RISK_COLORS = { high: '#ff4757', medium: '#ffa502', low: '#2ed573', unknown: '#747d8c' };
+const RISK_TEXT   = { high: '#fff',    medium: '#333',    low: '#fff',   unknown: '#fff'    };
+
+const LSTM_LABELS = { '好缺': '[+] 好缺', '普通': '[-] 普通', '屎缺': '[X] 屎缺' };
+const LSTM_BG     = { '好缺': '#2ed573', '普通': '#ffa502', '屎缺': '#ff4757' };
+const LSTM_TEXT   = { '好缺': '#fff',    '普通': '#333',    '屎缺': '#fff'    };
+
+function makeBadge({ cls, text, bg, color, title: tip, dataJobid }) {
+  const el = document.createElement('span');
+  el.className = `twra-badge ${cls}`;
+  if (dataJobid) el.dataset.jobid = dataJobid;
+  el.textContent = text;
+  if (tip) el.title = tip;
+  el.style.cssText = [
+    'display:inline-block', 'padding:2px 8px', 'border-radius:10px',
+    'font-size:11px', 'font-weight:700', 'vertical-align:middle', 'margin-left:5px',
+    `background:${bg}`, `color:${color}`,
+    'cursor:default', 'white-space:nowrap', 'line-height:1.9',
+    'position:relative', 'z-index:9999', 'letter-spacing:0.3px',
+    'box-shadow:0 1px 3px rgba(0,0,0,0.15)',
+  ].join(';');
+  return el;
+}
+
+// ══════════════════════════════════════════════════════
+// 主徽章渲染
+// ══════════════════════════════════════════════════════
+function renderBadgeOnLink(linkEl, result, jobId) {
+  // 避免重複渲染
+  if (linkEl.parentElement?.querySelector(`.twra-badge[data-jobid="${jobId}"]`)) return;
 
   const {
-    riskLevel = 'unknown', score = 0, reasons = [], recommendation = '',
-    lstmClass, lstmProbabilities
+    riskLevel = 'unknown', score = 0, reasons = [], recommendation = '', source = '',
+    lstmClass, lstmLabel, lstmProbabilities,
   } = result;
 
-  // ── 規則分析徽章 ───────────────────────────────────────
-  const badge = document.createElement('span');
-  badge.className = `twra-badge twra-badge--${riskLevel}`;
-  badge.textContent = RISK_LABELS[riskLevel] ?? '❓';
-  badge.title = [`風險分數：${score}/100`, ...reasons,
-    recommendation ? `💡 ${recommendation}` : ''].filter(Boolean).join('\n');
-  badge.style.cssText = _badgeStyle(
-    RISK_COLORS[riskLevel] ?? '#747d8c',
-    riskLevel === 'medium' ? '#333' : '#fff'
-  );
-  linkEl.after(badge);
+  // ── ① 規則 / AI 風險徽章 ──────────────────────────
+  const riskTip = [
+    `風險分數：${score}/100`,
+    source ? `來源：${source}` : '',
+    ...reasons,
+    recommendation ? recommendation : '',
+  ].filter(Boolean).join('\n');
 
-  // ── LSTM 分類徽章（有結果才顯示）──────────────────────
+  const riskBadge = makeBadge({
+    cls:      `twra-badge--risk twra-badge--${riskLevel}`,
+    text:     RISK_LABELS[riskLevel] ?? '[?]',
+    bg:       RISK_COLORS[riskLevel] ?? '#747d8c',
+    color:    RISK_TEXT[riskLevel]   ?? '#fff',
+    title:    riskTip,
+    dataJobid: jobId,
+  });
+  linkEl.after(riskBadge);
+
+  // ── ② LSTM 分類徽章（有結果才顯示）──────────────
   if (lstmClass && LSTM_LABELS[lstmClass]) {
-    const prob = lstmProbabilities?.[lstmClass];
-    const pct  = prob != null ? ` ${Math.round(prob * 100)}%` : '';
-
-    const lstmBadge = document.createElement('span');
-    lstmBadge.className = `twra-badge twra-badge--lstm twra-badge--lstm-${lstmClass}`;
-    lstmBadge.textContent = LSTM_LABELS[lstmClass] + pct;
-
-    const probLines = lstmProbabilities
-      ? Object.entries(lstmProbabilities)
+    const prob    = lstmProbabilities?.[lstmClass];
+    const pct     = prob != null ? ` ${Math.round(prob * 100)}%` : '';
+    const probTip = lstmProbabilities
+      ? '本地 LSTM 預測\n' +
+        Object.entries(lstmProbabilities)
           .sort((a, b) => b[1] - a[1])
           .map(([k, v]) => `  ${k}：${Math.round(v * 100)}%`)
           .join('\n')
-      : '';
-    lstmBadge.title = `🤖 本地 LSTM 模型預測\n${probLines}`;
-    lstmBadge.style.cssText = _badgeStyle(
-      LSTM_COLORS[lstmClass],
-      LSTM_TEXT_COLORS[lstmClass],
-      'margin-left:3px'
-    );
-    badge.after(lstmBadge);
+      : '本地 LSTM 預測';
+
+    const lstmBadge = makeBadge({
+      cls:   `twra-badge--lstm twra-badge--lstm-${lstmClass}`,
+      text:  LSTM_LABELS[lstmClass] + pct,
+      bg:    LSTM_BG[lstmClass],
+      color: LSTM_TEXT[lstmClass],
+      title: probTip,
+      dataJobid: jobId,
+    });
+    riskBadge.after(lstmBadge);
   }
 }
 
 // ══════════════════════════════════════════════════════
-// 重新注入（卡片被 vue-recycle-scroller 重用時）
+// 重新注入（vue-recycle-scroller 重用卡片時）
 // ══════════════════════════════════════════════════════
 function reInjectBadges() {
   for (const link of document.querySelectorAll('a[href*="/job/"]')) {
     const jobId = (link.getAttribute('href') || '').match(/\/job\/([a-zA-Z0-9]+)/)?.[1];
     if (!jobId) continue;
     const result = titleResultMap.get(jobId);
-    if (result) renderBadgeOnLink(link, result);
+    if (result && !link.parentElement?.querySelector(`.twra-badge[data-jobid="${jobId}"]`)) {
+      renderBadgeOnLink(link, result, jobId);
+    }
   }
 }
 
 // ══════════════════════════════════════════════════════
-// 供 popup 按鈕呼叫
+// 供 popup 手動觸發
 // ══════════════════════════════════════════════════════
 function scanJobListings() {
   const n = scanJobLinks();
@@ -186,16 +261,15 @@ chrome.storage.local.get(['autoAnalyze'], cfg => {
   if (cfg.autoAnalyze === false) { cLog('dim', 'autoAnalyze 關閉'); return; }
   cLog('info', `啟動：${location.pathname}`);
 
-  // DOM 就緒後第一次掃描
+  // 多次延遲掃描，等 Vue 渲染完成
   const firstScan = () => {
-    // 多次重試，等 Vue 渲染職缺卡片
     [500, 1500, 3000, 6000].forEach(d => setTimeout(scanJobLinks, d));
   };
   document.readyState === 'loading'
     ? document.addEventListener('DOMContentLoaded', firstScan)
     : firstScan();
 
-  // MutationObserver：監控 DOM 變動（滾動、換頁）
+  // MutationObserver：監控滾動 / 換頁帶來的新卡片
   const debounce = (fn, ms) => { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
   const obs = new MutationObserver(debounce(() => { scanJobLinks(); reInjectBadges(); }, 600));
   const startObs = () => obs.observe(document.body, { childList: true, subtree: true });
